@@ -40,3 +40,94 @@ updates every chart in one action.
 ---
 
 ## Architecture
+
+app/
+layout.tsx            Root layout, fonts, global styles
+page.tsx              Composition root: header + chart grid + sidebar
+components/
+charts/
+ChartGrid.tsx       Maps CHART_TIMEFRAMES -> TradingChart instances
+TradingChart.tsx    Imperative TradingView widget mount/teardown
+header/
+AssetSelector.tsx   Writes selected asset to global store
+chat/                 Analysis sidebar (presentational + mock engine)
+ui/                   shadcn/ui primitives
+hooks/
+useAssetStore.ts      Zustand store — single source of truth for asset
+lib/
+assets.ts             Asset registry + timeframe config (typed)
+chatMock.ts           Deterministic response engine (placeholder)
+
+
+**State flow:** `AssetSelector` → `useAssetStore` → `ChartGrid` →
+four `TradingChart` instances. One write, four re-renders, no prop drilling.
+
+**Charting:** rendered via the TradingView Advanced Chart embed widget.
+Market data, candle aggregation, and indicator computation (MACD) are handled
+by TradingView; this application owns the composition, state, and lifecycle
+layer.
+
+---
+
+## Tech Stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Framework | Next.js 14 (App Router) | RSC-ready, file-based routing |
+| Language | TypeScript (strict) | Typed asset/timeframe registries |
+| State | Zustand | Minimal global store, no provider tree |
+| Styling | Tailwind + shadcn/ui | Consistent primitives, no CSS sprawl |
+| Charts | TradingView Embed Widget | Production-grade rendering + data |
+
+---
+
+## Local Installation
+
+```bash
+git clone https://github.com/TheAhmedEffect/trading-dashboard.git
+cd trading-dashboard
+npm install
+npm run dev     # http://localhost:3000
+```
+
+No API keys required — the TradingView embed is public.
+
+---
+
+## Current Scope & Limitations
+
+Stated explicitly, because they define the next phase of work:
+
+- Market data and indicator computation are **delegated to TradingView**.
+  This project does not currently ingest, store, or transform OHLCV data.
+- The analysis sidebar returns **deterministic pre-written responses**
+  (`lib/chatMock.ts`). It is a UI contract for a future inference layer,
+  not a model.
+- There is no backend, persistence layer, or authentication.
+
+---
+
+## Roadmap
+
+**Phase 1 — Own the data layer**
+- Replace embed-only charting with a real OHLCV pipeline
+  (Polygon.io / Alpha Vantage / CCXT), persisted to Postgres/TimescaleDB.
+- Render candles client-side with `lightweight-charts` so the app controls
+  the data path end-to-end.
+
+**Phase 2 — Analytics**
+- Compute indicators in-house (ATR, RSI, MACD, realised volatility) rather
+  than consuming them from a vendor.
+- Add a Python service (FastAPI) for vectorised time-series work with
+  pandas/NumPy.
+
+**Phase 3 — Modelling**
+- Baseline forecasting on returns (not price): ARIMA/GARCH for volatility,
+  then gradient-boosted trees on engineered features.
+- Rigorous evaluation: walk-forward validation, no look-ahead bias,
+  transaction-cost-aware backtesting. Report honest out-of-sample metrics
+  including the ones that don't flatter the model.
+
+**Phase 4 — Replace the mock**
+- Swap `chatMock.ts` for a genuine inference endpoint operating on the
+  computed feature set.
